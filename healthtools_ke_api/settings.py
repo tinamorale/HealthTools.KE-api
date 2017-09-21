@@ -38,3 +38,5 @@ TGBOT = {
 }
 
 SLACK = {"url": os.getenv("WEBHOOK_URL")}
+
+CLOUDAMQP_URL = os.getenv("CLOUDAMQP_URL")

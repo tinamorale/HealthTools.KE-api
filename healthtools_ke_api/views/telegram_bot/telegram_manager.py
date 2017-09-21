@@ -19,7 +19,12 @@ from telegram.ext import (Dispatcher, Updater, CommandHandler,
 from telegram.error import InvalidToken, TelegramError
 
 from healthtools_ke_api.build_query import BuildQuery
-from healthtools_ke_api.settings import DEBUG, TGBOT
+from healthtools_ke_api.settings import DEBUG, TGBOT, CLOUDAMQP_URL
+
+from asynchronous_publisher_example import Publisher
+
+publisher = Publisher(CLOUDAMQP_URL)
+
 
 SERVER_IP = TGBOT["SERVER_IP"]
 PORT = TGBOT["TELEGRAM_PORT"]
@@ -86,7 +91,8 @@ def start_polling():
     logger.info('Start polling')
 
     # getUpdate does not work if webhook is set. So we delete any webhook
-    updater.bot.set_webhook()
+    if bot.getWebhookInfo().url:
+        bot.deleteWebhook()
 
     updater.start_polling(poll_interval=1.0, timeout=20)
     updater.idle()
@@ -101,15 +107,13 @@ def set_webhook(webhook_url, cert, key):
 
     # Delete any webhook to avoid Conflict: terminated by other setWebhook
     if bot:
-        bot.setWebhook()
-        time.sleep(5)  # to avoid error 4RetryAfter: Flood control exceeded
+        if bot.getWebhookInfo().url:
+            bot.deleteWebhook()
+            time.sleep(5)  # to avoid error 4RetryAfter: Flood control exceeded
 
-        # Using nginx + bot
-        bot.setWebhook(url=webhook_url
-                    #    certificate=open(CERT_FILE, 'rb')
-                    )
+        bot.setWebhook(url=webhook_url)
 
-        print ("\nWebhook set: %s \n", bot.getWebhookInfo().url)
+        print "\nTelegram Bot Webhook: {}\n".format(bot.getWebhookInfo().url)
 
     thread = Thread(target=dp.start, name='dp')
     thread.start()
@@ -238,6 +242,9 @@ def fetch_data(user_data):
     else:
         return "Keyword not valid"
 
+    publisher.message = query
+    publisher.run()
+
     search_results = build_query.build_query_response(query)
     return search_results
 
@@ -297,7 +304,7 @@ def setup():
     if bot:
         if DEBUG:
             # Use polling
-            return start_polling()
+            start_polling()
         else:
             # Start Webhook
             set_webhook(webhook_url=WEBHOOK_URL,
